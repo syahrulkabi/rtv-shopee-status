@@ -1,0 +1,113 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RTV Shopee Status</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f4f6fa;
+      color: #202938;
+    }
+    header {
+      background: #172554;
+      color: white;
+      padding: 24px;
+    }
+    header h1 { margin: 0 0 8px; font-size: 26px; }
+    header p { margin: 0; color: #dbeafe; }
+    main { max-width: 1100px; margin: 28px auto; padding: 0 18px; }
+    .toolbar {
+      display: flex; gap: 12px; flex-wrap: wrap;
+      align-items: center; justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    input {
+      padding: 11px 13px; border: 1px solid #cbd5e1;
+      border-radius: 8px; min-width: 230px; font-size: 14px;
+    }
+    button {
+      padding: 11px 16px; border: 0; border-radius: 8px;
+      background: #2563eb; color: white; font-weight: bold;
+      cursor: pointer;
+    }
+    .cards {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px; margin-bottom: 22px;
+    }
+    .card, .panel {
+      background: white; border: 1px solid #e2e8f0;
+      border-radius: 12px; padding: 20px;
+    }
+    .card span { color: #64748b; font-size: 14px; }
+    .card strong { display: block; margin-top: 10px; font-size: 28px; }
+    .panel h2 { margin-top: 0; font-size: 18px; }
+    .status { color: #64748b; font-size: 14px; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; text-align: left; }
+    th, td { padding: 13px 10px; border-bottom: 1px solid #e2e8f0; }
+    th { color: #64748b; font-size: 13px; }
+    .empty { text-align: center; padding: 32px 12px; color: #64748b; }
+    footer { text-align: center; padding: 24px; color: #64748b; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>RTV Shopee Status</h1>
+    <p>Shopee inventory overview</p>
+  </header>
+
+  <main>
+    <div class="toolbar">
+      <input id="search" type="search" placeholder="Search product name or SKU">
+      <button id="refresh" type="button">Refresh dashboard</button>
+    </div>
+
+    <section class="cards">
+      <div class="card"><span>Products</span><strong id="productCount">—</strong></div>
+      <div class="card"><span>Total available stock</span><strong id="stockCount">—</strong></div>
+      <div class="card"><span>Connection</span><strong id="connection" style="font-size:18px">Not connected</strong></div>
+    </section>
+
+    <section class="panel">
+      <h2>Products</h2>
+      <p class="status" id="status">Dashboard layout ready. Shopee data connection has not been configured yet.</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th>SKU</th>
+              <th>Item ID</th>
+              <th>Available stock</th>
+            </tr>
+          </thead>
+          <tbody id="products">
+            <tr><td colspan="4" class="empty">Your Shopee products will appear here after the secure connection is configured.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer>Read-only inventory dashboard · No stock changes are made by this page</footer>
+
+  <script>
+    document.getElementById("search").addEventListener("input", function () {
+      const term = this.value.trim().toLowerCase();
+      document.querySelectorAll("#products tr").forEach(function (row) {
+        row.hidden = !row.textContent.toLowerCase().includes(term);
+      });
+    });
+
+    document.getElementById("refresh").addEventListener("click", function () {
+      document.getElementById("status").textContent =
+        "The secure Shopee data connection has not been configured yet.";
+    });
+  </script>
+</body>
+</html>
