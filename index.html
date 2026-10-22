@@ -7,52 +7,28 @@
   <title>RTV Shopee Status</title>
   <style>
     * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #f4f6fa;
-      color: #202938;
-    }
-    header {
-      background: #172554;
-      color: white;
-      padding: 24px;
-    }
-    header h1 { margin: 0 0 8px; font-size: 26px; }
-    header p { margin: 0; color: #dbeafe; }
-    main { max-width: 1100px; margin: 28px auto; padding: 0 18px; }
-    .toolbar {
-      display: flex; gap: 12px; flex-wrap: wrap;
-      align-items: center; justify-content: space-between;
-      margin-bottom: 20px;
-    }
-    input {
-      padding: 11px 13px; border: 1px solid #cbd5e1;
-      border-radius: 8px; min-width: 230px; font-size: 14px;
-    }
-    button {
-      padding: 11px 16px; border: 0; border-radius: 8px;
-      background: #2563eb; color: white; font-weight: bold;
-      cursor: pointer;
-    }
-    .cards {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 16px; margin-bottom: 22px;
-    }
-    .card, .panel {
-      background: white; border: 1px solid #e2e8f0;
-      border-radius: 12px; padding: 20px;
-    }
-    .card span { color: #64748b; font-size: 14px; }
-    .card strong { display: block; margin-top: 10px; font-size: 28px; }
-    .panel h2 { margin-top: 0; font-size: 18px; }
-    .status { color: #64748b; font-size: 14px; }
-    .table-wrap { overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; text-align: left; }
-    th, td { padding: 13px 10px; border-bottom: 1px solid #e2e8f0; }
-    th { color: #64748b; font-size: 13px; }
-    .empty { text-align: center; padding: 32px 12px; color: #64748b; }
-    footer { text-align: center; padding: 24px; color: #64748b; font-size: 12px; }
+    body { margin:0; font-family:Arial,sans-serif; background:#f4f6fa; color:#202938; }
+    header { background:#172554; color:white; padding:24px; }
+    header h1 { margin:0 0 8px; font-size:26px; }
+    header p { margin:0; color:#dbeafe; }
+    main { max-width:1100px; margin:28px auto; padding:0 18px; }
+    .toolbar { display:flex; gap:12px; flex-wrap:wrap; justify-content:space-between; margin-bottom:20px; }
+    input { padding:11px 13px; border:1px solid #cbd5e1; border-radius:8px; min-width:230px; font-size:14px; }
+    button { padding:11px 16px; border:0; border-radius:8px; background:#2563eb; color:white; font-weight:bold; cursor:pointer; }
+    button:disabled { opacity:.6; cursor:wait; }
+    .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:16px; margin-bottom:22px; }
+    .card,.panel { background:white; border:1px solid #e2e8f0; border-radius:12px; padding:20px; }
+    .card span { color:#64748b; font-size:14px; }
+    .card strong { display:block; margin-top:10px; font-size:28px; overflow-wrap:anywhere; }
+    .panel h2 { margin-top:0; font-size:18px; }
+    .status { color:#64748b; font-size:14px; }
+    .table-wrap { overflow-x:auto; }
+    table { width:100%; border-collapse:collapse; text-align:left; }
+    th,td { padding:13px 10px; border-bottom:1px solid #e2e8f0; }
+    th { color:#64748b; font-size:13px; }
+    .empty { text-align:center; padding:32px 12px; color:#64748b; }
+    .pill { display:inline-block; padding:4px 8px; border-radius:20px; background:#dcfce7; color:#166534; font-size:12px; }
+    footer { text-align:center; padding:24px; color:#64748b; font-size:12px; }
   </style>
 </head>
 <body>
@@ -60,54 +36,132 @@
     <h1>RTV Shopee Status</h1>
     <p>Shopee inventory overview</p>
   </header>
-
   <main>
     <div class="toolbar">
       <input id="search" type="search" placeholder="Search product name or SKU">
-      <button id="refresh" type="button">Refresh dashboard</button>
+      <button id="refresh" type="button">Refresh inventory</button>
     </div>
 
     <section class="cards">
       <div class="card"><span>Products</span><strong id="productCount">—</strong></div>
       <div class="card"><span>Total available stock</span><strong id="stockCount">—</strong></div>
-      <div class="card"><span>Connection</span><strong id="connection" style="font-size:18px">Not connected</strong></div>
+      <div class="card"><span>Connection</span><strong id="connection" style="font-size:18px">Not checked</strong></div>
     </section>
 
     <section class="panel">
       <h2>Products</h2>
-      <p class="status" id="status">Dashboard layout ready. Shopee data connection has not been configured yet.</p>
+      <p class="status" id="status" role="status">Ready to load inventory.</p>
       <div class="table-wrap">
         <table>
-          <thead>
-            <tr>
-              <th>Product</th>
-              <th>SKU</th>
-              <th>Item ID</th>
-              <th>Available stock</th>
-            </tr>
-          </thead>
-          <tbody id="products">
-            <tr><td colspan="4" class="empty">Your Shopee products will appear here after the secure connection is configured.</td></tr>
-          </tbody>
+          <thead><tr><th>Product</th><th>SKU</th><th>Item ID</th><th>Available stock</th><th>Status</th></tr></thead>
+          <tbody id="products"><tr><td colspan="5" class="empty">Click “Refresh inventory” to load products.</td></tr></tbody>
         </table>
       </div>
     </section>
   </main>
-
-  <footer>Read-only inventory dashboard · No stock changes are made by this page</footer>
+  <footer>Read-only inventory dashboard · This page does not change stock</footer>
 
   <script>
-    document.getElementById("search").addEventListener("input", function () {
-      const term = this.value.trim().toLowerCase();
-      document.querySelectorAll("#products tr").forEach(function (row) {
-        row.hidden = !row.textContent.toLowerCase().includes(term);
-      });
-    });
+    const API_URL = "https://rtv-shopee-dashboard-api.syahrulkabi.workers.dev/api/products";
+    let allProducts = [];
 
-    document.getElementById("refresh").addEventListener("click", function () {
-      document.getElementById("status").textContent =
-        "The secure Shopee data connection has not been configured yet.";
-    });
+    const el = id => document.getElementById(id);
+
+    function availableStock(product) {
+      const info = product.stock_info_v2 || {};
+      const summary = info.summary_info || {};
+      if (summary.total_available_stock != null) {
+        return Number(summary.total_available_stock) || 0;
+      }
+      const seller = Array.isArray(info.seller_stock) ? info.seller_stock : [];
+      const models = Array.isArray(product.models) ? product.models : [];
+      if (models.length) {
+        return models.reduce((sum, model) => {
+          const stock = model.stock_info_v2?.summary_info?.total_available_stock;
+          return sum + (Number(stock) || 0);
+        }, 0);
+      }
+      return seller.reduce((sum, location) => sum + (Number(location.stock) || 0), 0);
+    }
+
+    function renderProducts() {
+      const term = el("search").value.trim().toLowerCase();
+      const filtered = allProducts.filter(p =>
+        [p.item_name, p.item_sku, p.item_id].some(v =>
+          String(v ?? "").toLowerCase().includes(term)
+        )
+      );
+
+      el("products").replaceChildren();
+      if (!filtered.length) {
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 5;
+        td.className = "empty";
+        td.textContent = allProducts.length ? "No matching products." : "No products returned.";
+        tr.appendChild(td);
+        el("products").appendChild(tr);
+        return;
+      }
+
+      for (const p of filtered) {
+        const tr = document.createElement("tr");
+        const values = [
+          p.item_name || "Unnamed product",
+          p.item_sku || "—",
+          p.item_id ?? "—",
+          availableStock(p),
+          p.item_status || "—"
+        ];
+        values.forEach((value, index) => {
+          const td = document.createElement("td");
+          if (index === 4) {
+            const pill = document.createElement("span");
+            pill.className = "pill";
+            pill.textContent = String(value);
+            td.appendChild(pill);
+          } else {
+            td.textContent = String(value);
+          }
+          tr.appendChild(td);
+        });
+        el("products").appendChild(tr);
+      }
+    }
+
+    async function loadInventory() {
+      const button = el("refresh");
+      button.disabled = true;
+      el("status").textContent = "Loading Shopee inventory…";
+      el("connection").textContent = "Connecting…";
+
+      try {
+        const response = await fetch(API_URL, { method: "GET", cache: "no-store" });
+        const data = await response.json();
+
+        if (!response.ok || data.success !== true || !Array.isArray(data.products)) {
+          throw new Error(data.error || `Request failed (${response.status})`);
+        }
+
+        allProducts = data.products;
+        el("productCount").textContent = allProducts.length;
+        el("stockCount").textContent = allProducts.reduce((sum, p) => sum + availableStock(p), 0);
+        el("connection").textContent = "Connected";
+        el("status").textContent = `Loaded ${allProducts.length} product(s). Stock was not changed.`;
+        renderProducts();
+      } catch (error) {
+        el("connection").textContent = "Error";
+        el("status").textContent =
+          "Could not load inventory. Check the dashboard Worker configuration and browser console. " +
+          (error instanceof Error ? error.message : "");
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    el("search").addEventListener("input", renderProducts);
+    el("refresh").addEventListener("click", loadInventory);
+    loadInventory();
   </script>
 </body>
 </html>
