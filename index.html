@@ -11,61 +11,97 @@
     header { background:#172554; color:white; padding:24px; }
     header h1 { margin:0 0 8px; font-size:26px; }
     header p { margin:0; color:#dbeafe; }
-    main { max-width:1100px; margin:28px auto; padding:0 18px; }
+    main { max-width:1200px; margin:28px auto; padding:0 18px; }
     .toolbar { display:flex; gap:12px; flex-wrap:wrap; justify-content:space-between; margin-bottom:20px; }
-    input { padding:11px 13px; border:1px solid #cbd5e1; border-radius:8px; min-width:230px; font-size:14px; }
+    input { padding:11px 13px; border:1px solid #cbd5e1; border-radius:8px; min-width:220px; font-size:14px; }
     button { padding:11px 16px; border:0; border-radius:8px; background:#2563eb; color:white; font-weight:bold; cursor:pointer; }
     button:disabled { opacity:.6; cursor:wait; }
     .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:16px; margin-bottom:22px; }
-    .card,.panel { background:white; border:1px solid #e2e8f0; border-radius:12px; padding:20px; }
+    .card,.panel { background:white; border:1px solid #e2e8f0; border-radius:12px; padding:20px; margin-bottom:22px; }
     .card span { color:#64748b; font-size:14px; }
     .card strong { display:block; margin-top:10px; font-size:28px; overflow-wrap:anywhere; }
     .panel h2 { margin-top:0; font-size:18px; }
-    .status { color:#64748b; font-size:14px; }
+    .status { color:#64748b; font-size:14px; line-height:1.5; }
     .table-wrap { overflow-x:auto; }
     table { width:100%; border-collapse:collapse; text-align:left; }
-    th,td { padding:13px 10px; border-bottom:1px solid #e2e8f0; }
+    th,td { padding:13px 10px; border-bottom:1px solid #e2e8f0; vertical-align:top; }
     th { color:#64748b; font-size:13px; }
     .empty { text-align:center; padding:32px 12px; color:#64748b; }
-    .pill { display:inline-block; padding:4px 8px; border-radius:20px; background:#dcfce7; color:#166534; font-size:12px; }
+    .pill { display:inline-block; padding:4px 8px; border-radius:20px; background:#dcfce7; color:#166534; font-size:12px; white-space:nowrap; }
+    .warning { background:#fef3c7; color:#92400e; }
+    .error { background:#fee2e2; color:#991b1b; }
+    .lookup-row { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+    .lookup-row input { flex:1; }
+    .result-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; margin-top:16px; }
+    .result-box { background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:14px; overflow-wrap:anywhere; }
+    .result-box span { display:block; color:#64748b; font-size:13px; margin-bottom:8px; }
+    .result-box strong { font-size:20px; }
+    .notice { padding:12px; background:#eff6ff; border-radius:8px; color:#1e40af; font-size:13px; line-height:1.5; }
     footer { text-align:center; padding:24px; color:#64748b; font-size:12px; }
+    @media(max-width:600px) {
+      header { padding:20px 16px; }
+      main { margin:18px auto; padding:0 12px; }
+      .card,.panel { padding:15px; }
+      th,td { padding:10px 8px; }
+    }
   </style>
 </head>
 <body>
   <header>
     <h1>RTV Shopee Status</h1>
-    <p>Shopee inventory overview</p>
+    <p>Shopee inventory overview and RTV comparison</p>
   </header>
+
   <main>
     <div class="toolbar">
-      <input id="search" type="search" placeholder="Search product name or SKU">
+      <input id="search" type="search" placeholder="Search Shopee product name or SKU">
       <button id="refresh" type="button">Refresh inventory</button>
     </div>
 
     <section class="cards">
       <div class="card"><span>Products</span><strong id="productCount">—</strong></div>
       <div class="card"><span>Total available stock</span><strong id="stockCount">—</strong></div>
-      <div class="card"><span>Connection</span><strong id="connection" style="font-size:18px">Not checked</strong></div>
+      <div class="card"><span>Shopee connection</span><strong id="connection" style="font-size:18px">Not checked</strong></div>
     </section>
 
     <section class="panel">
-      <h2>Products</h2>
+      <h2>RTV item lookup</h2>
+      <p class="status">Test one RTV item code or SKU at a time. This lookup does not change Shopee.</p>
+      <div class="lookup-row">
+        <input id="rtvQuery" type="search" placeholder="Enter RTV item code, e.g. PLYPVV8">
+        <button id="lookupButton" type="button">Look up RTV item</button>
+      </div>
+      <p id="rtvStatus" class="status" role="status">Ready for a single-item lookup.</p>
+      <div id="rtvResult"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Shopee products</h2>
       <p class="status" id="status" role="status">Ready to load inventory.</p>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Product</th><th>SKU</th><th>Item ID</th><th>Available stock</th><th>Status</th></tr></thead>
-          <tbody id="products"><tr><td colspan="5" class="empty">Click “Refresh inventory” to load products.</td></tr></tbody>
+          <thead>
+            <tr><th>Product</th><th>SKU</th><th>Item ID</th><th>Available stock</th><th>Status</th></tr>
+          </thead>
+          <tbody id="products">
+            <tr><td colspan="5" class="empty">Loading products…</td></tr>
+          </tbody>
         </table>
       </div>
     </section>
   </main>
-  <footer>Read-only inventory dashboard · This page does not change stock</footer>
+
+  <footer>Read-only inventory dashboard · No Shopee stock or price updates are performed</footer>
 
   <script>
     const API_URL = "https://rtv-shopee-dashboard-api.syahrulkabi.workers.dev/api/products";
+    const RTV_URL = "https://rtv-shopee-dashboard-api.syahrulkabi.workers.dev/api/rtv-item";
     let allProducts = [];
 
     const el = id => document.getElementById(id);
+    const money = value => value == null || !Number.isFinite(Number(value))
+      ? "Unavailable"
+      : "RM " + Number(value).toLocaleString("en-MY", { maximumFractionDigits: 2 });
 
     function availableStock(product) {
       const info = product.stock_info_v2 || {};
@@ -138,22 +174,219 @@
       try {
         const response = await fetch(API_URL, { method: "GET", cache: "no-store" });
         const data = await response.json();
-
         if (!response.ok || !Array.isArray(data.products)) {
-  throw new Error(data.error || `Request failed (${response.status})`);
-}
+          throw new Error(data.error || `Request failed (${response.status})`);
+        }
 
         allProducts = data.products;
-        el("productCount").textContent = allProducts.length;
-        el("stockCount").textContent = allProducts.reduce((sum, p) => sum + availableStock(p), 0);
+        el("productCount").textContent = allProducts.length.toLocaleString();
+        el("stockCount").textContent = allProducts.reduce((sum, p) => sum + availableStock(p), 0).toLocaleString();
         el("connection").textContent = "Connected";
         el("status").textContent = `Loaded ${allProducts.length} product(s). Stock was not changed.`;
         renderProducts();
       } catch (error) {
         el("connection").textContent = "Error";
         el("status").textContent =
-          "Could not load inventory. Check the dashboard Worker configuration and browser console. " +
-          (error instanceof Error ? error.message : "");
+          "Could not load inventory. " + (error instanceof Error ? error.message : "");
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    function stockDecision(item) {
+      const locations = Array.isArray(item.locations) ? item.locations : [];
+      const priority = ["ONLINE", "E33", "DM", "WH_SALES"];
+
+      for (const code of priority) {
+        const location = locations.find(loc => loc.code === code);
+        if (!location) continue;
+
+        const quantity = location.onHand;
+        if (quantity == null || !Number.isFinite(Number(quantity))) {
+          if (code === "WH_SALES") {
+            return {
+              location: code,
+              quantity: null,
+              proposed: null,
+              warning: "WH_SALES stock is unavailable. Manual review required; no stock update."
+            };
+          }
+          continue;
+        }
+
+        if (Number(quantity) > 0) {
+          if (code === "WH_SALES") {
+            return {
+              location: code,
+              quantity: Number(quantity),
+              proposed: 0,
+              warning: "WH_SALES is the first eligible positive location. Manual review required; proposed stock is 0."
+            };
+          }
+          return {
+            location: code,
+            quantity: Number(quantity),
+            proposed: Number(quantity),
+            warning: ""
+          };
+        }
+      }
+
+      return {
+        location: "None confirmed",
+        quantity: null,
+        proposed: null,
+        warning: "No eligible positive stock was confirmed. Manual review required; no stock update."
+      };
+    }
+
+    function renderRtvResult(data, query) {
+      const container = el("rtvResult");
+      container.replaceChildren();
+
+      const items = Array.isArray(data.items) ? data.items : [];
+      if (!items.length) {
+        el("rtvStatus").textContent = `No RTV items returned for "${query}".`;
+        return;
+      }
+
+      const item = items.find(x => String(x.itemCode || "").toLowerCase() === query.toLowerCase()) || items[0];
+      const priceB = Number(item.prices?.B);
+      const hasPrice = item.prices?.B != null && Number.isFinite(priceB);
+      const proposedPrice = hasPrice ? Math.ceil(priceB * 1.25) : null;
+      const stock = stockDecision(item);
+
+      el("rtvStatus").textContent =
+        items.length === 1 ? "RTV item found." : `${items.length} RTV result(s). Showing the exact code match if available, otherwise the first result.`;
+
+      const title = document.createElement("h3");
+      title.textContent = `${item.description || "RTV item"} (${item.itemCode || "No item code"})`;
+      container.appendChild(title);
+
+      const grid = document.createElement("div");
+      grid.className = "result-grid";
+
+      const boxes = [
+        ["RTV item code", item.itemCode || "Unavailable"],
+        ["RTV B price", hasPrice ? money(priceB) : "Unavailable"],
+        ["Proposed normal price (+25%)", proposedPrice == null ? "Unavailable" : money(proposedPrice)],
+        ["Selected RTV location", stock.location],
+        ["Selected On hand", stock.quantity == null ? "Unavailable" : String(stock.quantity)],
+        ["Candidate Shopee stock", stock.proposed == null ? "Not proposed" : String(stock.proposed)]
+      ];
+
+      for (const [label, value] of boxes) {
+        const box = document.createElement("div");
+        box.className = "result-box";
+        const span = document.createElement("span");
+        span.textContent = label;
+        const strong = document.createElement("strong");
+        strong.textContent = value;
+        box.append(span, strong);
+        grid.appendChild(box);
+      }
+      container.appendChild(grid);
+
+      const exactMatches = allProducts.filter(p =>
+        String(p.item_sku || "").trim().toLowerCase() === String(item.itemCode || "").trim().toLowerCase()
+      );
+
+      const matchPanel = document.createElement("div");
+      matchPanel.style.marginTop = "16px";
+      const matchTitle = document.createElement("h3");
+      matchTitle.textContent = "Shopee SKU match";
+      matchPanel.appendChild(matchTitle);
+
+      if (exactMatches.length) {
+        const matchText = document.createElement("p");
+        matchText.className = "status";
+        matchText.textContent = `${exactMatches.length} exact SKU match(es) found in the loaded Shopee products.`;
+        matchPanel.appendChild(matchText);
+
+        const tableWrap = document.createElement("div");
+        tableWrap.className = "table-wrap";
+        const table = document.createElement("table");
+        const thead = document.createElement("thead");
+        const headerRow = document.createElement("tr");
+        ["Shopee product", "SKU", "Item ID", "Current stock", "RTV candidate stock"].forEach(text => {
+          const th = document.createElement("th");
+          th.textContent = text;
+          headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        const tbody = document.createElement("tbody");
+        exactMatches.forEach(p => {
+          const row = document.createElement("tr");
+          [
+            p.item_name || "Unnamed product",
+            p.item_sku || "—",
+            p.item_id ?? "—",
+            String(availableStock(p)),
+            stock.proposed == null ? "Manual review" : String(stock.proposed)
+          ].forEach(text => {
+            const td = document.createElement("td");
+            td.textContent = text;
+            row.appendChild(td);
+          });
+          tbody.appendChild(row);
+        });
+        table.appendChild(tbody);
+        tableWrap.appendChild(table);
+        matchPanel.appendChild(tableWrap);
+      } else {
+        const noMatch = document.createElement("p");
+        noMatch.className = "status";
+        noMatch.textContent = "No exact Shopee SKU match found. Verify the SKU manually; no automatic match is assumed.";
+        matchPanel.appendChild(noMatch);
+      }
+      container.appendChild(matchPanel);
+
+      if (!hasPrice) {
+        addNotice(container, "RTV B price is missing or invalid. Manual price review required.");
+      }
+      if (stock.warning) {
+        addNotice(container, stock.warning, true);
+      }
+      addNotice(container, "Preview only. This dashboard does not update Shopee prices or stock.");
+    }
+
+    function addNotice(container, text, warning = false) {
+      const notice = document.createElement("p");
+      notice.className = warning ? "notice warning" : "notice";
+      notice.textContent = text;
+      container.appendChild(notice);
+    }
+
+    async function lookupRtv() {
+      const query = el("rtvQuery").value.trim();
+      if (!query) {
+        el("rtvStatus").textContent = "Enter one RTV item code or SKU first.";
+        return;
+      }
+
+      const button = el("lookupButton");
+      button.disabled = true;
+      el("rtvStatus").textContent = "Looking up one RTV item…";
+      el("rtvResult").replaceChildren();
+
+      try {
+        const url = new URL(RTV_URL);
+        url.searchParams.set("q", query);
+        const response = await fetch(url.toString(), {
+          method: "GET",
+          cache: "no-store"
+        });
+        const data = await response.json();
+
+        if (!response.ok || data.success !== true || !Array.isArray(data.items)) {
+          throw new Error(data.error || `RTV lookup failed (${response.status})`);
+        }
+        renderRtvResult(data, query);
+      } catch (error) {
+        el("rtvStatus").textContent =
+          "RTV lookup failed: " + (error instanceof Error ? error.message : "Unknown error");
       } finally {
         button.disabled = false;
       }
@@ -161,6 +394,11 @@
 
     el("search").addEventListener("input", renderProducts);
     el("refresh").addEventListener("click", loadInventory);
+    el("lookupButton").addEventListener("click", lookupRtv);
+    el("rtvQuery").addEventListener("keydown", event => {
+      if (event.key === "Enter") lookupRtv();
+    });
+
     loadInventory();
   </script>
 </body>
