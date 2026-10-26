@@ -75,6 +75,38 @@
       <div id="rtvResult"></div>
     </section>
 
+<section class="panel">
+  <h2>RTV comparison queue</h2>
+  <p class="status">
+    Compare the first 5 loaded Shopee products with RTV, one lookup at a time.
+    Read-only: no Shopee stock or prices will be changed.
+  </p>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+    <button id="startQueue" type="button">Start 5-product test</button>
+    <button id="pauseQueue" type="button" disabled>Pause queue</button>
+  </div>
+  <p id="queueStatus" class="status" role="status">Queue is idle.</p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>SKU</th>
+          <th>Shopee product</th>
+          <th>RTV result</th>
+          <th>B price</th>
+          <th>Proposed price</th>
+          <th>RTV location</th>
+          <th>On hand</th>
+          <th>Review</th>
+        </tr>
+      </thead>
+      <tbody id="queueResults">
+        <tr><td colspan="8" class="empty">Start the test to compare 5 products.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
     <section class="panel">
       <h2>Shopee products</h2>
       <p class="status" id="status" role="status">Ready to load inventory.</p>
@@ -97,6 +129,228 @@
     const API_URL = "https://rtv-shopee-dashboard-api.syahrulkabi.workers.dev/api/products";
     const RTV_URL = "https://rtv-shopee-dashboard-api.syahrulkabi.workers.dev/api/rtv-item";
     let allProducts = [];
+
+let queueRunning = false;
+let queuePaused = false;
+let queueResults = [];
+
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+function queueCell(row, value) {
+  const td = document.createElement("td");
+  td.textContent = value == null ? "Unavailable" : String(value);
+  row.appendChild(td);
+}
+
+function renderQueue() {
+  const tbody = el("queueResults");
+  tbody.replaceChildren();
+
+  if (!queueResults.length) {
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = 8;
+    td.className = "empty";
+    td.textContent = "No comparison results yet.";
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
+  }
+
+  for (const result of queueResults) {
+    const tr = document.createElement("tr");
+    queueCell(tr, result.sku);
+    queueCell(tr, result.name);
+    queueCell(tr, result.match);
+    queueCell(tr, result.bPrice);
+    queueCell(tr, result.proposedPrice);
+    queueCell(tr, result.location);
+    queueCell(tr, result.onHand);
+    queueCell(tr, result.review);
+    tbody.appendChild(tr);
+  }
+}
+
+async function runQueue() {
+  if (queueRunning) return;
+
+  if (!allProducts.length) {
+    el("queueStatus").textContent = "Load Shopee inventory first.";
+    return;
+  }
+
+  queueRunning = true;
+  queuePaused = false;
+  queueResults = [];
+  renderQueue();
+
+  el("startQueue").disabled = true;
+  el("pauseQueue").disabled = false;
+  el("pauseQueue").textContent = "Pause queue";
+
+  // Test five products with a delay between RTV requests.
+  const batch = allProducts.slice(0, 5);
+
+  try {
+    for (let i = 0; i < batch.length; i++) {
+      while (queuePaused) {
+        el("queueStatus").textContent =
+          `Paused after ${queueResults.length} of ${batch.length} products.`;
+        await wait(250);
+      }
+
+      const product = batch[i];
+      const sku = String(product.item_sku || "").trim();
+
+      el("queueStatus").textContent =
+        `Checking ${i + 1} of ${batch.length}: ${sku || "SKU missing"}…`;
+
+      if (!sku) {
+        queueResults.push({
+          sku: "Missing SKU",
+          name: product.item_name || "Unnamed product",
+          match: "Not searched",
+          bPrice: "—",
+          proposedPrice: "—",
+          location: "—",
+          onHand: "—",
+          review: "Manual review: SKU missing"
+        });
+        renderQueue();
+        continue;
+      }
+
+      // Never search more than one RTV item at a time.
+      const url = new URL(RTV_URL);
+      url.searchParams.set("q", sku);
+
+      let result;
+
+      try {
+        const response = await fetch(url.toString(), {
+          method: "GET",
+          cache: "no-store"
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || data.success !== true ||
+            !Array.isArray(data.items)) {
+          throw new Error(data.error || `RTV request failed (${response.status})`);
+        }
+
+        // Require an exact item-code match. Never assume the first
+        // fuzzy search result is the correct product.
+        const item = data.items.find(x =>
+          String(x.itemCode || "").trim().toLowerCase() === sku.toLowerCase()
+        );
+
+        if (!item) {
+          result = {
+            sku,
+            name: product.item_name || "Unnamed product",
+            match: "No exact match",
+            bPrice: "—",
+            proposedPrice: "—",
+            location: "—",
+            onHand: "—",
+            review: "Manual review required"
+          };
+        } else {
+          const b = item.prices?.B;
+          const validPrice = b != null && Number.isFinite(Number(b));
+          const bPrice = validPrice ? Number(b) : null;
+          const proposedPrice = validPrice ? Math.ceil(bPrice * 1.25) : null;
+
+          const locations = Array.isArray(item.locations) ? item.locations : [];
+          const priority = ["ONLINE", "E33", "DM", "WH_SALES"];
+          let chosen = null;
+          let review = "";
+
+          for (const code of priority) {
+            const loc = locations.find(x => x.code === code);
+            if (!loc) continue;
+
+            if (loc.onHand == null || !Number.isFinite(Number(loc.onHand))) {
+              if (code === "WH_SALES") {
+                chosen = loc;
+                review = "WH_SALES quantity unavailable; manual review";
+                break;
+              }
+              continue;
+            }
+
+            if (Number(loc.onHand) > 0) {
+              chosen = loc;
+              if (code === "WH_SALES") {
+                review = "WH_SALES selected; manual review, no stock update";
+              }
+              break;
+            }
+          }
+
+          if (!chosen) {
+            review = "No eligible positive stock confirmed; manual review";
+          }
+          if (!validPrice) {
+            review = [review, "B price unavailable"].filter(Boolean).join("; ");
+          }
+
+          result = {
+            sku,
+            name: product.item_name || "Unnamed product",
+            match: "Exact match",
+            bPrice: validPrice ? money(bPrice) : "Unavailable",
+            proposedPrice: validPrice ? money(proposedPrice) : "Unavailable",
+            location: chosen?.code || "None confirmed",
+            onHand: chosen?.onHand == null ? "Unavailable" : String(chosen.onHand),
+            review: review || "Review preview before any action"
+          };
+        }
+      } catch (error) {
+        // Stop on a lookup error instead of repeatedly hitting RTV.
+        result = {
+          sku,
+          name: product.item_name || "Unnamed product",
+          match: "Lookup failed",
+          bPrice: "—",
+          proposedPrice: "—",
+          location: "—",
+          onHand: "—",
+          review: error instanceof Error ? error.message : "Manual review required"
+        };
+        queueResults.push(result);
+        renderQueue();
+        el("queueStatus").textContent =
+          `Stopped safely at product ${i + 1}; inspect the error before restarting.`;
+        return;
+      }
+
+      queueResults.push(result);
+      renderQueue();
+
+      // Give the RTV system breathing room between searches.
+      if (i < batch.length - 1) await wait(2500);
+    }
+
+    el("queueStatus").textContent =
+      `Finished: ${queueResults.length} of ${batch.length} products checked. Review results before proceeding.`;
+  } finally {
+    queueRunning = false;
+    queuePaused = false;
+    el("startQueue").disabled = false;
+    el("pauseQueue").disabled = true;
+    el("pauseQueue").textContent = "Pause queue";
+  }
+}
+
+el("startQueue").addEventListener("click", runQueue);
+
+el("pauseQueue").addEventListener("click", () => {
+  if (!queueRunning) return;
+  queuePaused = !queuePaused;
+  el("pauseQueue").textContent = queuePaused ? "Resume queue" : "Pause queue";
+});
 
     const el = id => document.getElementById(id);
     const money = value => value == null || !Number.isFinite(Number(value))
