@@ -139,9 +139,9 @@
         const response = await fetch(API_URL, { method: "GET", cache: "no-store" });
         const data = await response.json();
 
-        if (!response.ok || data.success !== true || !Array.isArray(data.products)) {
-          throw new Error(data.error || `Request failed (${response.status})`);
-        }
+        if (!response.ok || !Array.isArray(data.products)) {
+  throw new Error(data.error || `Request failed (${response.status})`);
+}
 
         allProducts = data.products;
         el("productCount").textContent = allProducts.length;
