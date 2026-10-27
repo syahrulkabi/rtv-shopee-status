@@ -94,6 +94,7 @@
           <th>Shopee product</th>
           <th>RTV result</th>
           <th>B price</th>
+          <th>UOM</th>
           <th>Proposed price</th>
           <th>RTV location</th>
           <th>On hand</th>
@@ -101,7 +102,7 @@
         </tr>
       </thead>
       <tbody id="queueResults">
-        <tr><td colspan="8" class="empty">Start the test to compare 5 products.</td></tr>
+        <tr><td colspan="9" class="empty">Start the test to compare 5 products.</td></tr>
       </tbody>
     </table>
   </div>
@@ -130,6 +131,44 @@
     const RTV_URL = "https://rtv-shopee-dashboard-api.syahrulkabi.workers.dev/api/rtv-item";
     let allProducts = [];
 
+const SPECIAL_PAIR_SKUS = [
+  "SPKCSM12", "SPKPVPA912", "SPKPV9915", "SPKPVPA615L", "SPKPVPS015A",
+  "SPKPVPS012A", "SPKPVX12", "SPKSNPR12", "SPKPVKT12", "SPKEA312",
+  "SPKSNPR15", "SPKPV115", "SPKSNM12", "SPKSNM15", "SPKJ12", "SPKJ15",
+  "SPKHSWE412", "SPKHSWE415", "SPKHS1615"
+];
+
+function priceDecision(item, sku) {
+  const rawB = item?.prices?.B;
+  const hasPrice = rawB != null && Number.isFinite(Number(rawB));
+  const bPrice = hasPrice ? Number(rawB) : null;
+  const uom = String(item?.uom || "").trim().toUpperCase();
+  const approvedSku = SPECIAL_PAIR_SKUS.includes(String(sku || "").trim().toUpperCase());
+  const specialPair = approvedSku && uom === "PAIR";
+  let review = "";
+
+  if (!uom) {
+    review = "UOM unavailable; manual pricing review required";
+  } else if (uom !== "PCS" && uom !== "PAIR") {
+    review = `Unexpected UOM (${uom}); manual pricing review required`;
+  } else if (approvedSku && uom === "PCS") {
+    review = "Approved speaker SKU is PCS; normal pricing applied";
+  } else if (specialPair) {
+    review = "Approved speaker SKU is PAIR; special pricing applied";
+  }
+
+  const proposedPrice = hasPrice && (uom === "PCS" || uom === "PAIR")
+    ? Math.ceil(bPrice * (specialPair ? 0.625 : 1.25))
+    : null;
+
+  if (!hasPrice) {
+    review = [review, "B price unavailable; manual price review required"].filter(Boolean).join("; ");
+  }
+
+  return { hasPrice, bPrice, uom: uom || "Unavailable", proposedPrice, review, specialPair };
+}
+
+
 let queueRunning = false;
 let queuePaused = false;
 let queueResults = [];
@@ -149,7 +188,7 @@ function renderQueue() {
   if (!queueResults.length) {
     const tr = document.createElement("tr");
     const td = document.createElement("td");
-    td.colSpan = 8;
+    td.colSpan = 9;
     td.className = "empty";
     td.textContent = "No comparison results yet.";
     tr.appendChild(td);
@@ -163,6 +202,7 @@ function renderQueue() {
     queueCell(tr, result.name);
     queueCell(tr, result.match);
     queueCell(tr, result.bPrice);
+    queueCell(tr, result.uom);
     queueCell(tr, result.proposedPrice);
     queueCell(tr, result.location);
     queueCell(tr, result.onHand);
@@ -211,6 +251,7 @@ async function runQueue() {
           name: product.item_name || "Unnamed product",
           match: "Not searched",
           bPrice: "—",
+          uom: "—",
           proposedPrice: "—",
           location: "—",
           onHand: "—",
@@ -251,21 +292,19 @@ async function runQueue() {
             name: product.item_name || "Unnamed product",
             match: "No exact match",
             bPrice: "—",
+            uom: "—",
             proposedPrice: "—",
             location: "—",
             onHand: "—",
             review: "Manual review required"
           };
         } else {
-          const b = item.prices?.B;
-          const validPrice = b != null && Number.isFinite(Number(b));
-          const bPrice = validPrice ? Number(b) : null;
-          const proposedPrice = validPrice ? Math.ceil(bPrice * 1.25) : null;
+          const pricing = priceDecision(item, sku);
+          let review = "";
 
           const locations = Array.isArray(item.locations) ? item.locations : [];
-          const priority = ["ONLINE", "E33", "DM", "WH_SALES"];
-          let chosen = null;
-          let review = "";
+const priority = ["ONLINE", "E33", "DM", "WH_SALES"];
+let chosen = null;
 
           for (const code of priority) {
             const loc = locations.find(x => x.code === code);
@@ -292,7 +331,7 @@ async function runQueue() {
           if (!chosen) {
             review = "No eligible positive stock confirmed; manual review";
           }
-          if (!validPrice) {
+          if (!pricing.hasPrice) {
             review = [review, "B price unavailable"].filter(Boolean).join("; ");
           }
 
@@ -300,11 +339,12 @@ async function runQueue() {
             sku,
             name: product.item_name || "Unnamed product",
             match: "Exact match",
-            bPrice: validPrice ? money(bPrice) : "Unavailable",
-            proposedPrice: validPrice ? money(proposedPrice) : "Unavailable",
+            bPrice: pricing.hasPrice ? money(pricing.bPrice) : "Unavailable",
+            uom: pricing.uom,
+            proposedPrice: pricing.proposedPrice == null ? "Unavailable" : money(pricing.proposedPrice),
             location: chosen?.code || "None confirmed",
             onHand: chosen?.onHand == null ? "Unavailable" : String(chosen.onHand),
-            review: review || "Review preview before any action"
+            review: [pricing.review, review || "Review preview before any action"].filter(Boolean).join("; ")
           };
         }
       } catch (error) {
@@ -314,6 +354,7 @@ async function runQueue() {
           name: product.item_name || "Unnamed product",
           match: "Lookup failed",
           bPrice: "—",
+          uom: "—",
           proposedPrice: "—",
           location: "—",
           onHand: "—",
@@ -496,14 +537,27 @@ async function runQueue() {
         return;
       }
 
-      const item = items.find(x => String(x.itemCode || "").toLowerCase() === query.toLowerCase()) || items[0];
-      const priceB = Number(item.prices?.B);
-      const hasPrice = item.prices?.B != null && Number.isFinite(priceB);
-      const proposedPrice = hasPrice ? Math.ceil(priceB * 1.25) : null;
+      const exactItem = items.find(x =>
+        String(x.itemCode || "").trim().toLowerCase() === query.trim().toLowerCase()
+      );
+
+      // If the search returns several related items but none exactly matches,
+      // do not silently price the first result as if it were the requested SKU.
+      if (!exactItem && items.length > 1) {
+        el("rtvStatus").textContent =
+          "Several RTV results were returned, but none exactly matches your query. Please enter the exact RTV item code to avoid using the wrong price or stock.";
+        return;
+      }
+
+      const item = exactItem || items[0];
+      const pricing = priceDecision(item, item.itemCode || query);
+      const priceB = pricing.bPrice;
+      const hasPrice = pricing.hasPrice;
+      const proposedPrice = pricing.proposedPrice;
       const stock = stockDecision(item);
 
       el("rtvStatus").textContent =
-        items.length === 1 ? "RTV item found." : `${items.length} RTV result(s). Showing the exact code match if available, otherwise the first result.`;
+        exactItem ? "Exact RTV item code match found." : "One RTV result found.";
 
       const title = document.createElement("h3");
       title.textContent = `${item.description || "RTV item"} (${item.itemCode || "No item code"})`;
@@ -515,7 +569,9 @@ async function runQueue() {
       const boxes = [
         ["RTV item code", item.itemCode || "Unavailable"],
         ["RTV B price", hasPrice ? money(priceB) : "Unavailable"],
-        ["Proposed normal price (+25%)", proposedPrice == null ? "Unavailable" : money(proposedPrice)],
+        ["RTV UOM", pricing.uom],
+        [pricing.specialPair ? "Proposed special price (B ÷ 2 × 1.25)" : "Proposed normal price (+25%)",
+          proposedPrice == null ? "Unavailable" : money(proposedPrice)],
         ["Selected RTV location", stock.location],
         ["Selected On hand", stock.quantity == null ? "Unavailable" : String(stock.quantity)],
         ["Candidate Shopee stock", stock.proposed == null ? "Not proposed" : String(stock.proposed)]
@@ -589,8 +645,8 @@ async function runQueue() {
       }
       container.appendChild(matchPanel);
 
-      if (!hasPrice) {
-        addNotice(container, "RTV B price is missing or invalid. Manual price review required.");
+      if (pricing.review) {
+        addNotice(container, pricing.review, true);
       }
       if (stock.warning) {
         addNotice(container, stock.warning, true);
