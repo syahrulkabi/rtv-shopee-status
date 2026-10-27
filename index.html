@@ -344,14 +344,6 @@ async function runQueue() {
   }
 }
 
-el("startQueue").addEventListener("click", runQueue);
-
-el("pauseQueue").addEventListener("click", () => {
-  if (!queueRunning) return;
-  queuePaused = !queuePaused;
-  el("pauseQueue").textContent = queuePaused ? "Resume queue" : "Pause queue";
-});
-
     const el = id => document.getElementById(id);
     const money = value => value == null || !Number.isFinite(Number(value))
       ? "Unavailable"
@@ -652,7 +644,13 @@ el("pauseQueue").addEventListener("click", () => {
     el("rtvQuery").addEventListener("keydown", event => {
       if (event.key === "Enter") lookupRtv();
     });
+el("startQueue").addEventListener("click", runQueue);
 
+el("pauseQueue").addEventListener("click", () => {
+  if (!queueRunning) return;
+  queuePaused = !queuePaused;
+  el("pauseQueue").textContent = queuePaused ? "Resume queue" : "Pause queue";
+});
     loadInventory();
   </script>
 </body>
